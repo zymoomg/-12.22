@@ -1,0 +1,460 @@
+<!DOCTYPE html>
+<html lang="zh">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, height=device-height, initial-scale=1.0">
+    <title>扫雷游戏</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; 
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            background-color: #fff;
+            margin: 0;
+            padding: 20px;
+            height: 100vh;
+            color: #333;
+            position: relative; /* Added for positioning the top-right controls */
+        }
+        h1 {
+            color: #ff69b4;
+            margin-bottom: 20px;
+            font-size: 3em;
+            font-weight: bold;
+            text-align: center;
+        }
+        .achievement-notification {
+            margin-bottom: 10px;
+            font-size: 18px;
+            color: #fff;
+            background-color: #ff1493;
+            padding: 10px;
+            border-radius: 5px;
+            display: none;
+            transition: opacity 0.5s;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+        }
+        .top-right {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            display: flex;
+            gap: 10px;
+        }
+        .board {
+            display: grid;
+            gap: 4px;
+            margin: 20px 0;
+            border-radius: 10px;
+            background-color: #ffeef8;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.1);
+        }
+        .cell {
+            width: 50px;
+            height: 50px;
+            background-color: #ffccdf;
+            border: 1px solid #ff69b4;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background-color 0.3s, transform 0.2s;
+            border-radius: 5px;
+        }
+        .cell:hover {
+            background-color: #ffb3d9;
+            transform: scale(1.05);
+        }
+        .cell.clicked {
+            background-color: #ff99cc;
+        }
+        .cell.bomb {
+            background-color: #ff4500;
+        }
+        .cell.flag {
+            background-color: #ffd700;
+            color: red;
+            font-weight: bold;
+        }
+        .message, .timer {
+            margin-top: 20px;
+            font-size: 20px;
+            color: #333;
+        }
+        .win-message {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            font-size: 24px;
+            color: #fff;
+            background-color: #32cd32;
+            padding: 15px;
+            border-radius: 10px;
+            display: none;
+        }
+        select, button {
+            padding: 10px 15px;
+            font-size: 16px;
+            cursor: pointer;
+            border: 1px solid #ff69b4;
+            border-radius: 5px;
+            background-color: #ff69b4;
+            color: #fff;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        select:hover, button:hover {
+            background-color: #ff1493;
+            transform: scale(1.05);
+        }
+        button:active {
+            background-color: #dc143c;
+        }
+        .modal {
+            display: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            justify-content: center;
+            align-items: center;
+            z-index: 1000;
+        }
+        .modal-content {
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+            text-align: center;
+            width: 300px;
+        }
+        .modal-header {
+            font-size: 20px;
+            margin-bottom: 10px;
+            color: #ff69b4;
+            font-weight: bold;
+        }
+        .modal-body {
+            margin-bottom: 20px;
+            color: #333;
+        }
+        .close-button {
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            padding: 10px 15px;
+            border-radius: 5px;
+            cursor: pointer;
+            transition: background-color 0.3s;
+        }
+        .close-button:hover {
+            background-color: #c82333;
+        }
+    </style>
+</head>
+<body>
+
+<h1>扫雷游戏</h1>
+<div class="achievement-notification" id="achievementNotification"></div>
+
+<!-- Top-right controls for achievements and sharing -->
+<div class="top-right">
+    <button onclick="openAchievements()">查看成就 🏆</button>
+    <button onclick="shareGame()">分享游戏 📢</button>
+</div>
+
+<div class="buttons">
+    <select id="difficulty" onchange="updateDifficultyText()">
+        <option value="easy">简单 🌼</option>
+        <option value="medium">中等 🌟</option>
+        <option value="hard">困难 🔥</option>
+    </select>
+    <button onclick="startGame()">开始游戏 🎮</button>
+    <button onclick="confirmRestart()">重新游戏 ♻️</button>
+    <button onclick="giveHint()">提示 💡</button>
+</div>
+
+<div class="board" id="board"></div>
+<div class="timer" id="timer">时间: 0秒</div>
+<div class="message" id="message"></div>
+<div class="win-message" id="winMessage">恭喜你赢了！🎉</div>
+
+<div class="modal" id="achievementModal">
+    <div class="modal-content">
+        <div class="modal-header">成就列表 🏅</div>
+        <div class="modal-body" id="achievementList"></div>
+        <button class="close-button" onclick="closeAchievements()">关闭 ❌</button>
+    </div>
+</div>
+
+<script>
+    let boardSize = 10;
+    let mineCount = 15;
+    let board = [];
+    let revealedCount = 0;
+    let gameActive = false;
+    let timerInterval;
+    let timeElapsed = 0;
+    let achievements = [];
+    const achievementList = [
+        "赢得比赛 🥇",
+        "第一次点击 🖱️",
+        "揭示 10 个安全格子 🔟",
+        "揭示 20 个安全格子 2️⃣0️⃣",
+        "标记 5 个雷 🚩",
+    ];
+
+    let inactivityTimer;
+
+    function createBoard() {
+        board = Array.from({ length: boardSize }, () => Array(boardSize).fill(0));
+        for (let i = 0; i < mineCount; i++) {
+            let x, y;
+            do {
+                x = Math.floor(Math.random() * boardSize);
+                y = Math.floor(Math.random() * boardSize);
+            } while (board[x][y] === 'X');
+            board[x][y] = 'X';
+            updateSurroundingCells(x, y);
+        }
+    }
+
+    function updateSurroundingCells(x, y) {
+        for (let i = -1; i <= 1; i++) {
+            for (let j = -1; j <= 1; j++) {
+                const newX = x + i;
+                const newY = y + j;
+                if (newX >= 0 && newX < boardSize && newY >= 0 && newY < boardSize && board[newX][newY] !== 'X') {
+                    board[newX][newY]++;
+                }
+            }
+        }
+    }
+
+    function revealCell(x, y) {
+        resetInactivityTimer();
+        if (!gameActive || document.getElementById(`cell-${x}-${y}`).classList.contains('clicked')) return;
+
+        if (revealedCount === 0) {
+            addAchievement(achievementList[1]); // 第一次点击
+        }
+
+        if (board[x][y] === 'X') {
+            document.getElementById('message').innerText = '游戏结束！💔';
+            clearInterval(timerInterval);
+            revealAllCells();
+            gameActive = false;
+            return;
+        }
+
+        revealedCount++;
+        document.getElementById(`cell-${x}-${y}`).innerText = board[x][y] > 0 ? board[x][y] : '';
+        document.getElementById(`cell-${x}-${y}`).classList.add('clicked');
+
+        if (revealedCount === 10) {
+            addAchievement(achievementList[2]); // 揭示 10 个安全格子
+        } else if (revealedCount === 20) {
+            addAchievement(achievementList[3]); // 揭示 20 个安全格子
+        }
+
+        if (board[x][y] === 0) {
+            for (let i = -1; i <= 1; i++) {
+                for (let j = -1; j <= 1; j++) {
+                    const newX = x + i;
+                    const newY = y + j;
+                    if (newX >= 0 && newX < boardSize && newY >= 0 && newY < boardSize) {
+                        revealCell(newX, newY);
+                    }
+                }
+            }
+        }
+
+        if (revealedCount === (boardSize * boardSize - mineCount)) {
+            document.getElementById('winMessage').style.display = 'block';
+            clearInterval(timerInterval);
+            gameActive = false;
+            addAchievement(achievementList[0]); // 赢得比赛
+        }
+    }
+
+    function revealAllCells() {
+        for (let i = 0; i < boardSize; i++) {
+            for (let j = 0; j < boardSize; j++) {
+                const cell = document.getElementById(`cell-${i}-${j}`);
+                if (board[i][j] === 'X') {
+                    cell.classList.add('bomb');
+                } else {
+                    cell.innerText = board[i][j] > 0 ? board[i][j] : '';
+                }
+                cell.classList.add('clicked');
+            }
+        }
+    }
+
+    function toggleFlag(x, y) {
+        const cell = document.getElementById(`cell-${x}-${y}`);
+        if (!cell.classList.contains('clicked')) {
+            if (cell.classList.contains('flag')) {
+                cell.classList.remove('flag');
+                cell.innerText = '';
+            } else {
+                cell.classList.add('flag');
+                cell.innerText = '🚩';
+                addAchievement("标记 5 个雷 🚩");
+            }
+        }
+    }
+
+    function createCells() {
+        const boardElement = document.getElementById('board');
+        boardElement.innerHTML = '';
+        boardElement.style.gridTemplateColumns = `repeat(${boardSize}, 50px)`;
+        boardElement.style.gridTemplateRows = `repeat(${boardSize}, 50px)`;
+        for (let i = 0; i < boardSize; i++) {
+            for (let j = 0; j < boardSize; j++) {
+                const cell = document.createElement('div');
+                cell.classList.add('cell');
+                cell.id = `cell-${i}-${j}`;
+                cell.addEventListener('click', () => revealCell(i, j));
+                cell.addEventListener('contextmenu', (event) => {
+                    event.preventDefault();
+                    toggleFlag(i, j);
+                });
+                boardElement.appendChild(cell);
+            }
+        }
+    }
+
+    function startGame() {
+        const difficulty = document.getElementById('difficulty').value;
+        switch (difficulty) {
+            case 'easy':
+                boardSize = 8;
+                mineCount = 10;
+                break;
+            case 'medium':
+                boardSize = 10;
+                mineCount = 15;
+                break;
+            case 'hard':
+                boardSize = 12;
+                mineCount = 20;
+                break;
+        }
+        gameActive = true;
+        revealedCount = 0;
+        timeElapsed = 0;
+        document.getElementById('timer').innerText = `时间: 0秒`;
+        document.getElementById('message').innerText = '';
+        document.getElementById('winMessage').style.display = 'none';
+        createBoard();
+        createCells();
+        startTimer();
+        resetInactivityTimer();
+    }
+
+    function confirmRestart() {
+        if (confirm("你确定要重新开始游戏吗？")) {
+            endGame();
+            startGame();
+        }
+    }
+
+    function endGame() {
+        gameActive = false;
+        document.getElementById('message').innerText = '游戏已结束。💔';
+        revealAllCells();
+        clearInterval(timerInterval);
+    }
+
+    function giveHint() {
+        if (!gameActive) return;
+
+        let hintGiven = false;
+        for (let i = 0; i < boardSize; i++) {
+            for (let j = 0; j < boardSize; j++) {
+                if (!document.getElementById(`cell-${i}-${j}`).classList.contains('clicked') && board[i][j] !== 'X') {
+                    revealCell(i, j);
+                    hintGiven = true;
+                    break;
+                }
+            }
+            if (hintGiven) break;
+        }
+    }
+
+    function startTimer() {
+        timerInterval = setInterval(() => {
+            timeElapsed++;
+            document.getElementById('timer').innerText = `时间: ${timeElapsed}秒`;
+        }, 1000);
+    }
+
+    function addAchievement(achievement) {
+        if (!achievements.includes(achievement)) {
+            achievements.push(achievement);
+            updateAchievementList();
+            showAchievementNotification(achievement);
+        }
+    }
+
+    function updateAchievementList() {
+        const achievementListElement = document.getElementById('achievementList');
+        achievementListElement.innerHTML = achievements.length > 0 ? achievements.join('<br>') : '没有成就。';
+    }
+
+    function showAchievementNotification(achievement) {
+        const notification = document.getElementById('achievementNotification');
+        notification.innerText = `恭喜！你达成了成就: ${achievement}`;
+        notification.style.display = 'block';
+
+        setTimeout(() => {
+            notification.style.display = 'none';
+        }, 3000);
+    }
+
+    function openAchievements() {
+        document.getElementById('achievementModal').style.display = 'flex';
+        updateAchievementList();
+    }
+
+    function closeAchievements() {
+        document.getElementById('achievementModal').style.display = 'none';
+    }
+
+    function updateDifficultyText() {
+        const difficulty = document.getElementById('difficulty').value;
+    }
+
+    function shareGame() {
+        if (navigator.share) {
+            navigator.share({
+                title: '来玩扫雷游戏！',
+                text: '我正在玩扫雷游戏，快来挑战吧！',
+                url: window.location.href
+            })
+            .then(() => console.log('分享成功'))
+            .catch(err => console.error('分享失败', err));
+        } else {
+            alert('你的浏览器不支持分享功能。');
+        }
+    }
+
+    function resetInactivityTimer() {
+        clearTimeout(inactivityTimer);
+        inactivityTimer = setTimeout(() => {
+            const notification = document.getElementById('achievementNotification');
+            if (notification.style.display === 'block') {
+                notification.style.opacity = notification.style.opacity === '1' ? '0.5' : '1';
+            }
+        }, 5000);
+    }
+</script>
+
+</body>
+</html>
